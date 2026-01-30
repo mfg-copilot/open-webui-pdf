@@ -1,11 +1,12 @@
 #!/bin/bash
-# Quick Start Script para Open WebUI con Docker
+# Script de Inicio Rápido para Open WebUI con Docker
 # Este script facilita el inicio de Open WebUI usando Docker
 
-set -e
+# Note: Using || true for cleanup commands that may fail if containers don't exist
+# This is intentional for the cleanup section only
 
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║         Open WebUI - Docker Quick Start                  ║"
+echo "║         Open WebUI - Inicio Rápido con Docker            ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -43,7 +44,10 @@ case $option in
         fi
         
         # Iniciar con docker compose
-        docker compose up -d
+        if ! docker compose up -d; then
+            echo "❌ Error al iniciar con Docker Compose"
+            exit 1
+        fi
         
         echo ""
         echo "✅ Servicios iniciados:"
@@ -79,17 +83,41 @@ case $option in
                 ;;
             2)
                 read -p "URL del servidor Ollama (ej: http://192.168.1.100:11434): " ollama_url
+                # Validar que la URL no esté vacía y tenga formato básico de URL
+                if [[ -z "$ollama_url" ]] || [[ ! "$ollama_url" =~ ^https?:// ]]; then
+                    echo "❌ Error: URL inválida. Debe comenzar con http:// o https://"
+                    exit 1
+                fi
                 docker run -d -p 3000:8080 \
-                    -e OLLAMA_BASE_URL="$ollama_url" \
+                    -e "OLLAMA_BASE_URL=$ollama_url" \
                     -v open-webui:/app/backend/data \
                     --name open-webui \
                     --restart always \
                     ghcr.io/open-webui/open-webui:main
                 ;;
             3)
-                read -p "API Key de OpenAI: " openai_key
+                echo ""
+                echo "⚠️  ADVERTENCIA DE SEGURIDAD:"
+                echo "   Las API keys no deben ingresarse directamente por seguridad."
+                echo "   Recomendamos usar un archivo .env en su lugar."
+                echo ""
+                read -p "¿Continuar de todos modos? (s/n): " continue_unsafe
+                if [[ "$continue_unsafe" != "s" && "$continue_unsafe" != "S" ]]; then
+                    echo "Operación cancelada. Usa un archivo .env:"
+                    echo "  1. Crea .env con: echo 'OPENAI_API_KEY=tu-key' > .env"
+                    echo "  2. Ejecuta: docker run -d -p 3000:8080 --env-file .env -v open-webui:/app/backend/data --name open-webui ghcr.io/open-webui/open-webui:main"
+                    exit 0
+                fi
+                
+                read -s -p "API Key de OpenAI: " openai_key
+                echo ""
+                # Validar que la clave no esté vacía
+                if [[ -z "$openai_key" ]]; then
+                    echo "❌ Error: La API key no puede estar vacía"
+                    exit 1
+                fi
                 docker run -d -p 3000:8080 \
-                    -e OPENAI_API_KEY="$openai_key" \
+                    -e "OPENAI_API_KEY=$openai_key" \
                     -v open-webui:/app/backend/data \
                     --name open-webui \
                     --restart always \
@@ -114,7 +142,10 @@ case $option in
         echo ""
         
         # Construir la imagen
-        docker build -t open-webui:local .
+        if ! docker build -t open-webui:local .; then
+            echo "❌ Error al construir la imagen"
+            exit 1
+        fi
         
         echo ""
         echo "✅ Imagen construida exitosamente"

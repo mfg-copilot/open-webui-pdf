@@ -43,13 +43,22 @@ docker run -d -p 3000:8080 \
 
 #### Opción C: Solo con API de OpenAI
 
+> ⚠️ **Advertencia de Seguridad**: No expongas API keys directamente en la línea de comandos. 
+> Para producción, usa `--env-file` o Docker secrets (ver sección de Seguridad más abajo).
+
 ```bash
+# Método seguro: usando archivo de variables de entorno
+echo "OPENAI_API_KEY=tu_clave_secreta" > .env
 docker run -d -p 3000:8080 \
-  -e OPENAI_API_KEY=tu_clave_secreta \
+  --env-file .env \
   -v open-webui:/app/backend/data \
   --name open-webui \
   --restart always \
   ghcr.io/open-webui/open-webui:main
+
+# O usando Docker secrets (solo para Docker Swarm):
+# echo "tu_clave_secreta" | docker secret create openai_key -
+# docker service create --secret openai_key ...
 ```
 
 #### Opción D: Con soporte para GPU NVIDIA
@@ -179,18 +188,33 @@ El Dockerfile utiliza una **construcción multi-etapa** profesional:
 
 ### Ejemplo de archivo .env
 
-Puedes crear un archivo `.env` para configurar variables:
+Puedes crear un archivo `.env` para configurar variables de forma segura:
+
+> ⚠️ **Importante**: Genera claves seguras aleatorias, no uses valores predecibles.
 
 ```env
 OLLAMA_BASE_URL=http://ollama:11434
-WEBUI_SECRET_KEY=tu-clave-secreta-aqui
-OPENAI_API_KEY=sk-tu-clave-api
+# Genera una clave segura: openssl rand -base64 32
+WEBUI_SECRET_KEY=<genera-una-clave-aleatoria-fuerte>
+# Usa tu API key real de OpenAI
+OPENAI_API_KEY=sk-<tu-clave-real-de-openai>
 ```
 
 Y usarlo con docker-compose:
 
 ```bash
 docker compose --env-file .env up -d
+```
+
+**Para Docker Run:**
+
+```bash
+docker run -d -p 3000:8080 \
+  --env-file .env \
+  -v open-webui:/app/backend/data \
+  --name open-webui \
+  --restart always \
+  ghcr.io/open-webui/open-webui:main
 ```
 
 ## Gestión de Volúmenes y Datos
@@ -338,19 +362,45 @@ docker run -d -p 3000:8080 \
 
 ### Mejores Prácticas
 
-1. **Usa una clave secreta fuerte**:
+1. **Usa una clave secreta fuerte y aleatoria**:
    ```bash
-   -e WEBUI_SECRET_KEY=$(openssl rand -base64 32)
+   # Genera una clave aleatoria segura
+   openssl rand -base64 32
+   
+   # Úsala con Docker Run (a través de archivo .env)
+   echo "WEBUI_SECRET_KEY=$(openssl rand -base64 32)" > .env
+   docker run -d -p 3000:8080 --env-file .env ...
    ```
 
-2. **No expongas el puerto innecesariamente**: Solo mapea `-p 3000:8080` si necesitas acceso externo
+2. **NUNCA expongas API keys en la línea de comandos**:
+   - ❌ **MAL**: `docker run -e OPENAI_API_KEY=sk-123456...`
+   - ✅ **BIEN**: `docker run --env-file .env ...`
+   - Las claves en línea de comandos quedan en:
+     - Historial del shell (~/.bash_history)
+     - Lista de procesos (ps aux)
+     - Logs del sistema
+     - Output de `docker inspect`
 
-3. **Mantén las imágenes actualizadas**:
+3. **Protege el archivo .env**:
+   ```bash
+   chmod 600 .env
+   echo ".env" >> .gitignore
+   ```
+
+4. **No expongas el puerto innecesariamente**: Solo mapea `-p 3000:8080` si necesitas acceso externo
+
+5. **Mantén las imágenes actualizadas**:
    ```bash
    docker pull ghcr.io/open-webui/open-webui:main
    ```
 
-4. **Usa volúmenes nombrados** en lugar de bind mounts para mejor seguridad
+6. **Usa volúmenes nombrados** en lugar de bind mounts para mejor seguridad
+
+7. **Para producción, considera usar Docker Secrets** (en Docker Swarm):
+   ```bash
+   echo "mi_api_key_secreta" | docker secret create openai_key -
+   # Luego referenciar en docker-compose.yaml
+   ```
 
 ## Recursos Adicionales
 
